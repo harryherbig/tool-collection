@@ -2,24 +2,32 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
+  <title>Timer mit Loop</title>
+  <!-- Materialize CSS -->
+  <link
+          rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
+  />
+  <!-- Material Icons -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Sport Timer</title>
-  <!-- Materialize CSS CDN -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"/>
+
   <style>
     body {
       background: #f2f7f9;
       font-family: 'Roboto', sans-serif;
-      padding: 8px;
-    }
-    .container {
-      padding: 0;
+      margin: 0;
+      padding: 16px;
     }
     h1, h2 {
       color: #37474f;
       margin: 0.5rem 0;
+      text-align: center;
     }
-    /* Container für Timer */
+    .row {
+      margin-bottom: 8px;
+    }
+    /* Hauptbereich für Timer */
     #timersContainer {
       display: flex;
       flex-wrap: wrap;
@@ -32,7 +40,7 @@
       border: 2px dashed #4fc3f7;
       border-radius: 4px;
       padding: 8px;
-      min-height: 100px;
+      min-height: 80px;
       background: #e1f5fe;
       margin-bottom: 16px;
     }
@@ -62,41 +70,72 @@
     }
     .card-action {
       padding: 8px;
+      text-align: center;
     }
-    .btn {
-      padding: 0 8px;
-      height: 36px;
-      line-height: 36px;
+    .time-inputs {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 8px;
     }
-    /* Reduziertes Margin für Input-Felder */
-    .input-field {
-      margin: 0;
+    .time-inputs input {
+      text-align: center;
+      font-size: 1.6rem;
+      width: 60px;
+      margin: 0 4px;
+    }
+    .colon {
+      font-size: 1.6rem;
+      margin: 0 8px;
+    }
+    .switch label {
+      font-size: 1rem;
+    }
+    .go-button {
+      width: 100%;
+      font-size: 1.2rem;
+      height: 42px;
+      line-height: 42px;
+    }
+    .control-bar {
+      text-align: center;
+      margin-bottom: 16px;
     }
   </style>
 </head>
 <body>
+
 <div class="container">
-  <h1 class="center-align">Sport Timer</h1>
-  <div class="center-align" style="margin-bottom:16px;">
+  <h1>Timer mit Loop</h1>
+
+  <!-- Buttons zum Hinzufügen und Speichern -->
+  <div class="control-bar">
     <a id="addTimerBtn" class="btn waves-effect waves-light">Timer hinzufügen</a>
     <a id="saveStateBtn" class="btn waves-effect waves-light green">Speichern</a>
   </div>
 
+  <!-- Timer-Container -->
   <div id="timersContainer"></div>
 
-  <h2 class="center-align">Loop Bereich</h2>
-  <p class="center-align" style="margin-bottom:8px;">Ziehe Timer in den Loop Bereich, um sie nacheinander ablaufen zu lassen.</p>
+  <h2>Loop Bereich</h2>
+  <p class="center-align" style="margin-bottom:8px;">
+    Ziehe Timer in den Loop Bereich, um sie nacheinander ablaufen zu lassen.
+  </p>
   <div id="loopArea" ondragover="event.preventDefault()" ondrop="handleDrop(event)"></div>
-  <div class="center-align" style="margin-top:8px;">
-    <a id="startLoopBtn" class="btn waves-effect waves-light blue">Loop Starten</a>
+
+  <!-- Loop-Steuerung -->
+  <div class="control-bar">
+    <a id="startLoopBtn" class="btn waves-effect waves-light green">Loop Starten</a>
+  </div>
+  <div class="control-bar">
     <a id="resetLoopBtn" class="btn waves-effect waves-light red">Loop Resetten</a>
   </div>
 </div>
 
-<!-- Materialize JS CDN -->
+<!-- Materialize JS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 <script>
-  // Globaler Audio Context, der beim ersten User-Klick aktiviert wird
+  // Globaler Audio Context (für iOS Safari muss dieser durch User-Klick aktiviert werden)
   let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   document.addEventListener('click', () => {
     if (audioCtx.state === 'suspended') {
@@ -104,22 +143,7 @@
     }
   });
 
-  // Globale Variablen
-  let nextTimerId = 1;
-  const timersById = {};
-  let loopTimers = [];
-  let loopRunning = false;
-  let loopCurrentIndex = 0;
-  let currentLoopTimer = null;
-
-  // Hilfsfunktion: Formatierung in mm:ss
-  function formatTime(seconds) {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return m + ":" + (s < 10 ? "0" : "") + s;
-  }
-
-  // Kurzer, dezent piepender Ton in den letzten Sekunden
+  // Beep-Funktion für die letzten 5 Sekunden
   function beep() {
     if (audioCtx.state === 'suspended') {
       audioCtx.resume();
@@ -128,14 +152,14 @@
     const gainNode = audioCtx.createGain();
     oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
-    gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
     oscillator.connect(gainNode);
     gainNode.connect(audioCtx.destination);
     oscillator.start();
-    oscillator.stop(audioCtx.currentTime + 0.1);
+    oscillator.stop(audioCtx.currentTime + 0.2);
   }
 
-  // Angenehmer, deutlicher Endton
+  // Angenehmer, deutlicher Endton (wenn Countdown bei 0 ankommt)
   function playFinishTone() {
     if (audioCtx.state === 'suspended') {
       audioCtx.resume();
@@ -151,28 +175,51 @@
     oscillator.stop(audioCtx.currentTime + 0.5);
   }
 
-  // Timer-Klasse mit persistierbaren Daten und editierbarem Label
+  // Timer-Registry und Loop-Variablen
+  let nextTimerId = 1;
+  const timersById = {};
+  let loopTimers = [];
+  let loopRunning = false;
+  let loopCurrentIndex = 0;
+  let currentLoopTimer = null;
+
+  // Hilfsfunktion: zweistellige Anzeige
+  function pad(num) {
+    return num < 10 ? '0' + num : num;
+  }
+
+  // Timer-Klasse mit Countdown-Logik
   class Timer {
     constructor(data) {
       if (data) {
+        // Wiederherstellung aus localStorage
         this.id = data.id;
-        this.presetTime = data.presetTime;
+        this.initialMinutes = data.initialMinutes;
+        this.initialSeconds = data.initialSeconds;
         this.beepEnabled = data.beepEnabled;
-        this.labelText = data.labelText || ("Timer " + data.id);
-        this.currentTime = this.presetTime;
         if (this.id >= nextTimerId) {
           nextTimerId = this.id + 1;
         }
       } else {
+        // Neuer Timer
         this.id = nextTimerId++;
-        this.presetTime = 60;
+        this.initialMinutes = 0;
+        this.initialSeconds = 30;
         this.beepEnabled = false;
-        this.labelText = "Timer " + this.id;
-        this.currentTime = this.presetTime;
       }
+
+      // Aktuelle Restzeit in Sekunden
+      this.currentSeconds = this.initialMinutes * 60 + this.initialSeconds;
+
+      // Zustände
+      this.intervalId = null;
+      this.isRunning = false;
+      this.finishedCallback = null;
+
+      // In Registry speichern
       timersById[this.id] = this;
 
-      // Erstelle Card
+      // UI-Elemente aufbauen
       this.cardCol = document.createElement("div");
       this.cardCol.className = "timer card z-depth-2";
       this.cardCol.id = "timer-" + this.id;
@@ -184,121 +231,129 @@
       const cardContent = document.createElement("div");
       cardContent.className = "card-content";
 
-      // Editierbares Label für den Timer
-      const rowLabel = document.createElement("div");
-      rowLabel.className = "row";
-      const labelInputDiv = document.createElement("div");
-      labelInputDiv.className = "input-field col s12";
-      this.labelInput = document.createElement("input");
-      this.labelInput.type = "text";
-      this.labelInput.id = "label-input-" + this.id;
-      this.labelInput.value = this.labelText;
-      this.labelInput.addEventListener("change", () => {
-        this.labelText = this.labelInput.value;
-      });
-      const labelLabel = document.createElement("label");
-      labelLabel.setAttribute("for", this.labelInput.id);
-      labelLabel.className = "active";
-      labelLabel.textContent = "Timer Label:";
-      labelInputDiv.appendChild(this.labelInput);
-      labelInputDiv.appendChild(labelLabel);
-      rowLabel.appendChild(labelInputDiv);
-      cardContent.appendChild(rowLabel);
+      // Minuten/Sekunden-Eingabe (als Anzeige und Eingabe zugleich)
+      const timeRow = document.createElement("div");
+      timeRow.className = "time-inputs";
+      this.minutesInput = document.createElement("input");
+      this.minutesInput.type = "number";
+      this.minutesInput.min = "0";
+      this.minutesInput.value = this.initialMinutes;
+      this.minutesInput.inputMode = "numeric";
 
-      // Eingabefeld: Zeit in Sekunden
-      const rowTime = document.createElement("div");
-      rowTime.className = "row";
-      const inputDiv = document.createElement("div");
-      inputDiv.className = "input-field col s12";
-      this.timeInput = document.createElement("input");
-      this.timeInput.type = "number";
-      this.timeInput.id = "time-input-" + this.id;
-      this.timeInput.value = this.presetTime;
-      this.timeInput.min = 1;
-      this.timeInput.addEventListener("change", () => {
-        this.presetTime = parseInt(this.timeInput.value, 10) || 1;
-        if (!this.interval) {
-          this.currentTime = this.presetTime;
-          this.updateDisplay();
+      this.secondsInput = document.createElement("input");
+      this.secondsInput.type = "number";
+      this.secondsInput.min = "0";
+      this.secondsInput.max = "59";
+      this.secondsInput.value = this.initialSeconds;
+      this.secondsInput.inputMode = "numeric";
+
+      // Änderungen an den Eingabefeldern (nur, wenn der Timer nicht läuft)
+      this.minutesInput.addEventListener("change", () => {
+        if (!this.isRunning) {
+          this.initialMinutes = parseInt(this.minutesInput.value, 10) || 0;
+          updateCurrentSeconds();
         }
       });
-      const timeLabel = document.createElement("label");
-      timeLabel.setAttribute("for", this.timeInput.id);
-      timeLabel.className = "active";
-      timeLabel.textContent = "Zeit (Sek):";
-      inputDiv.appendChild(this.timeInput);
-      inputDiv.appendChild(timeLabel);
-      rowTime.appendChild(inputDiv);
-      cardContent.appendChild(rowTime);
-
-      // Checkbox: Piepen in den letzten Sekunden
-      const rowCheckbox = document.createElement("div");
-      rowCheckbox.className = "row";
-      const colCheckbox = document.createElement("div");
-      colCheckbox.className = "col s12";
-      const checkboxLabel = document.createElement("label");
-      this.beepCheckbox = document.createElement("input");
-      this.beepCheckbox.type = "checkbox";
-      this.beepCheckbox.id = "beep-checkbox-" + this.id;
-      this.beepCheckbox.checked = this.beepEnabled;
-      this.beepCheckbox.addEventListener("change", () => {
-        this.beepEnabled = this.beepCheckbox.checked;
+      this.secondsInput.addEventListener("change", () => {
+        if (!this.isRunning) {
+          let val = parseInt(this.secondsInput.value, 10) || 0;
+          if (val < 0) val = 0;
+          if (val > 59) val = 59;
+          this.initialSeconds = val;
+          updateCurrentSeconds();
+        }
       });
-      const spanCheckbox = document.createElement("span");
-      spanCheckbox.textContent = " Piepen in den letzten Sekunden";
-      checkboxLabel.appendChild(this.beepCheckbox);
-      checkboxLabel.appendChild(spanCheckbox);
-      colCheckbox.appendChild(checkboxLabel);
-      rowCheckbox.appendChild(colCheckbox);
-      cardContent.appendChild(rowCheckbox);
 
-      // Anzeige der verbleibenden Zeit
-      this.display = document.createElement("h5");
-      this.display.className = "center-align";
-      this.display.textContent = formatTime(this.currentTime);
-      cardContent.appendChild(this.display);
+      // Hilfsfunktion, um this.currentSeconds zu aktualisieren und die Felder zu updaten
+      const updateCurrentSeconds = () => {
+        this.currentSeconds = this.initialMinutes * 60 + this.initialSeconds;
+        this.updateDisplay();
+      };
+
+      // Doppelpunkt
+      const colon = document.createElement("div");
+      colon.className = "colon";
+      colon.textContent = ":";
+
+      timeRow.appendChild(this.minutesInput);
+      timeRow.appendChild(colon);
+      timeRow.appendChild(this.secondsInput);
+      cardContent.appendChild(timeRow);
+
+      // Toggle für Piepen in den letzten 5 Sekunden
+      const rowBeep = document.createElement("div");
+      rowBeep.className = "row center-align";
+      const switchDiv = document.createElement("div");
+      switchDiv.className = "switch";
+      const switchLabel = document.createElement("label");
+      switchLabel.innerHTML = `
+          Kein Piepen
+          <input type="checkbox" />
+          <span class="lever"></span>
+          Piepen
+        `;
+      this.beepSwitch = switchLabel.querySelector("input");
+      this.beepSwitch.checked = this.beepEnabled;
+      this.beepSwitch.addEventListener("change", () => {
+        this.beepEnabled = this.beepSwitch.checked;
+      });
+      switchDiv.appendChild(switchLabel);
+      rowBeep.appendChild(switchDiv);
+      cardContent.appendChild(rowBeep);
+
+      // Hier entfällt das separate Display – stattdessen werden die Eingabefelder zur Anzeige genutzt
 
       this.cardCol.appendChild(cardContent);
 
-      // Card-Action: Start/Reset Button
+      // Card Action: GO/STOP Button
       const cardAction = document.createElement("div");
-      cardAction.className = "card-action center-align";
-      this.button = document.createElement("button");
-      this.button.className = "btn";
-      this.button.textContent = "Start";
-      this.button.addEventListener("click", () => {
-        if (this.interval) {
-          this.reset();
-          this.button.textContent = "Start";
-        } else {
+      cardAction.className = "card-action";
+      this.goButton = document.createElement("button");
+      this.goButton.className = "btn go-button green";
+      this.goButton.textContent = "GO";
+      this.goButton.addEventListener("click", () => {
+        if (!this.isRunning) {
           this.start();
-          this.button.textContent = "Reset";
+        } else {
+          this.stop();
         }
       });
-      cardAction.appendChild(this.button);
+      cardAction.appendChild(this.goButton);
       this.cardCol.appendChild(cardAction);
     }
 
+    // Aktualisiert die Eingabefelder mit der aktuellen Restzeit
     updateDisplay() {
-      this.display.textContent = formatTime(this.currentTime);
+      const m = Math.floor(this.currentSeconds / 60);
+      const s = this.currentSeconds % 60;
+      this.minutesInput.value = m;
+      this.secondsInput.value = s;
     }
 
+    // Countdown starten
     start() {
-      this.timeInput.disabled = true;
-      this.beepCheckbox.disabled = true;
-      this.labelInput.disabled = true;
-      if (this.interval) return;
-      this.interval = setInterval(() => {
-        if (this.currentTime > 0) {
-          this.currentTime--;
-          this.updateDisplay();
-          if (this.beepEnabled && this.currentTime <= 5 && this.currentTime > 0) {
+      if (this.isRunning) return;
+      this.isRunning = true;
+      this.goButton.textContent = "STOP";
+      this.goButton.classList.remove("green");
+      this.goButton.classList.add("red");
+
+      // Eingabefelder sperren
+      this.minutesInput.disabled = true;
+      this.secondsInput.disabled = true;
+      this.beepSwitch.disabled = true;
+
+      this.intervalId = setInterval(() => {
+        if (this.currentSeconds > 0) {
+          this.currentSeconds--;
+          // Piepton in den letzten 5 Sekunden
+          if (this.beepEnabled && this.currentSeconds <= 5 && this.currentSeconds > 0) {
             beep();
           }
+          this.updateDisplay();
         } else {
           this.stop();
           playFinishTone();
-          this.button.textContent = "Start";
           if (this.finishedCallback) {
             this.finishedCallback();
           }
@@ -306,23 +361,30 @@
       }, 1000);
     }
 
+    // Countdown stoppen
     stop() {
-      clearInterval(this.interval);
-      this.interval = null;
-      this.timeInput.disabled = false;
-      this.beepCheckbox.disabled = false;
-      this.labelInput.disabled = false;
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+      this.isRunning = false;
+      this.goButton.textContent = "GO";
+      this.goButton.classList.remove("red");
+      this.goButton.classList.add("green");
+
+      // Eingaben wieder freigeben
+      this.minutesInput.disabled = false;
+      this.secondsInput.disabled = false;
+      this.beepSwitch.disabled = false;
     }
 
+    // Zurücksetzen (z.B. vor dem Start im Loop)
     reset() {
       this.stop();
-      this.currentTime = this.presetTime;
+      this.currentSeconds = this.initialMinutes * 60 + this.initialSeconds;
       this.updateDisplay();
       this.finishedCallback = null;
-      this.button.disabled = false;
     }
 
-    // Rückgabe der Timer-Daten für localStorage
+    // Zustand für localStorage
     getState() {
       let inLoop = false;
       if (this.cardCol.parentElement && this.cardCol.parentElement.id === "loopArea") {
@@ -330,9 +392,9 @@
       }
       return {
         id: this.id,
-        presetTime: this.presetTime,
+        initialMinutes: this.initialMinutes,
+        initialSeconds: this.initialSeconds,
         beepEnabled: this.beepEnabled,
-        labelText: this.labelText,
         inLoop: inLoop
       };
     }
@@ -344,21 +406,18 @@
     document.getElementById("timersContainer").appendChild(timer.cardCol);
   }
 
-  // Drag & Drop: Timer in den Loop-Bereich ziehen
+  // Drop im Loop-Bereich
   function handleDrop(event) {
     event.preventDefault();
     const timerId = event.dataTransfer.getData("text/plain");
     const timer = timersById[timerId];
-    if (timer) {
-      const loopArea = document.getElementById("loopArea");
-      if (!loopTimers.includes(timer)) {
-        loopArea.appendChild(timer.cardCol);
-        loopTimers.push(timer);
-      }
+    if (timer && !loopTimers.includes(timer)) {
+      document.getElementById("loopArea").appendChild(timer.cardCol);
+      loopTimers.push(timer);
     }
   }
 
-  // Loop starten: Timer nacheinander ausführen
+  // Loop starten: Timer nacheinander ablaufen lassen
   function startLoop() {
     if (loopTimers.length === 0) return;
     loopRunning = true;
@@ -366,6 +425,7 @@
     runLoopTimer(loopTimers[loopCurrentIndex]);
   }
 
+  // Hilfsfunktion: startet einen Timer im Loop und registriert dessen Callback
   function runLoopTimer(timer) {
     timer.reset();
     timer.finishedCallback = function() {
@@ -379,23 +439,25 @@
     };
     currentLoopTimer = timer;
     timer.start();
-    timer.button.disabled = true;
+    // Button sperren, damit im Loop nicht manuell gestoppt wird
+    timer.goButton.disabled = true;
   }
 
+  // Loop resetten
   function resetLoop() {
     loopRunning = false;
     if (currentLoopTimer) {
       currentLoopTimer.stop();
-      currentLoopTimer.button.disabled = false;
+      currentLoopTimer.goButton.disabled = false;
     }
-    loopTimers.forEach(timer => {
-      timer.reset();
-      timer.button.disabled = false;
+    loopTimers.forEach(t => {
+      t.reset();
+      t.goButton.disabled = false;
     });
     loopCurrentIndex = 0;
   }
 
-  // Speichern: Zustand (alle Timer + Loop-Reihenfolge) persistieren
+  // Speichern (Timer + Loop-Reihenfolge) in localStorage
   function saveState() {
     const timersState = [];
     for (let id in timersById) {
@@ -403,51 +465,57 @@
         timersState.push(timersById[id].getState());
       }
     }
-    const loopOrder = loopTimers.map(timer => timer.id);
+    const loopOrder = loopTimers.map(t => t.id);
     const state = {
       nextTimerId: nextTimerId,
       timers: timersState,
       loopOrder: loopOrder
     };
-    localStorage.setItem("sportTimerState", JSON.stringify(state));
-    M.toast({html: 'State gespeichert!', displayLength: 2000});
+    localStorage.setItem("sportTimerLoopState", JSON.stringify(state));
+    M.toast({html: 'Zustand gespeichert!', displayLength: 2000});
   }
 
-  // Zustand laden und Timer wiederherstellen
+  // Laden aus localStorage
   function loadState() {
-    const stateStr = localStorage.getItem("sportTimerState");
-    if (stateStr) {
-      const state = JSON.parse(stateStr);
-      nextTimerId = state.nextTimerId || 1;
-      for (let key in timersById) {
-        if (timersById.hasOwnProperty(key)) {
-          const timer = timersById[key];
-          if (timer.cardCol.parentElement) {
-            timer.cardCol.parentElement.removeChild(timer.cardCol);
-          }
+    const stateStr = localStorage.getItem("sportTimerLoopState");
+    if (!stateStr) return;
+    const state = JSON.parse(stateStr);
+    nextTimerId = state.nextTimerId || 1;
+
+    // Bestehende Timer aus DOM entfernen
+    for (let key in timersById) {
+      if (timersById.hasOwnProperty(key)) {
+        const oldTimer = timersById[key];
+        if (oldTimer.cardCol.parentElement) {
+          oldTimer.cardCol.parentElement.removeChild(oldTimer.cardCol);
         }
       }
-      Object.keys(timersById).forEach(key => delete timersById[key]);
-      loopTimers = [];
-      if (state.timers && Array.isArray(state.timers)) {
-        state.timers.forEach(timerData => {
-          const timer = new Timer(timerData);
-          if (timerData.inLoop) {
-            document.getElementById("loopArea").appendChild(timer.cardCol);
-            loopTimers.push(timer);
-          } else {
-            document.getElementById("timersContainer").appendChild(timer.cardCol);
-          }
-        });
-      }
+    }
+    // Registry leeren
+    Object.keys(timersById).forEach(key => delete timersById[key]);
+    loopTimers = [];
+
+    // Timer neu erstellen
+    if (state.timers && Array.isArray(state.timers)) {
+      state.timers.forEach(tData => {
+        const timer = new Timer(tData);
+        if (tData.inLoop) {
+          document.getElementById("loopArea").appendChild(timer.cardCol);
+          loopTimers.push(timer);
+        } else {
+          document.getElementById("timersContainer").appendChild(timer.cardCol);
+        }
+      });
     }
   }
 
+  // Event-Listener für Buttons
   document.getElementById("addTimerBtn").addEventListener("click", addTimer);
   document.getElementById("saveStateBtn").addEventListener("click", saveState);
   document.getElementById("startLoopBtn").addEventListener("click", startLoop);
   document.getElementById("resetLoopBtn").addEventListener("click", resetLoop);
 
+  // Beim Laden: Zustand wiederherstellen oder ersten Timer anlegen
   document.addEventListener("DOMContentLoaded", () => {
     loadState();
     if (Object.keys(timersById).length === 0) {
