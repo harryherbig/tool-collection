@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sport Timer</title>
+  <!-- Materialize CSS CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"/>
+  <style>
+    body {
+      background: #f2f7f9;
+      font-family: 'Roboto', sans-serif;
+      padding: 16px;
+    }
+    h1, h2 {
+      color: #37474f;
+    }
+    /* Container für Timer (Flexbox) */
+    #timersContainer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    /* Loop-Bereich */
+    #loopArea {
+      border: 2px dashed #4fc3f7;
+      border-radius: 4px;
+      padding: 16px;
+      min-height: 120px;
+      background: #e1f5fe;
+    }
+    /* Timer-Karten: mobile-first, Pastellgrün */
+    .timer {
+      cursor: move;
+      width: 100%;
+      max-width: 300px;
+    }
+    @media (min-width: 600px) {
+      .timer {
+        width: calc(50% - 16px);
+      }
+    }
+    @media (min-width: 992px) {
+      .timer {
+        width: calc(33.33% - 16px);
+      }
+    }
+    .card {
+      background-color: #e8f5e9;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1 class="center-align">Sport Timer</h1>
+  <div class="center-align" style="margin-bottom:24px;">
+    <a id="addTimerBtn" class="btn waves-effect waves-light">Timer hinzufügen</a>
+    <a id="saveStateBtn" class="btn waves-effect waves-light green">Speichern</a>
+  </div>
+
+  <div id="timersContainer"></div>
+
+  <h2>Loop Bereich</h2>
+  <p>Ziehe Timer in den Loop Bereich, um sie nacheinander ablaufen zu lassen.</p>
+  <div id="loopArea" ondragover="event.preventDefault()" ondrop="handleDrop(event)"></div>
+  <div class="center-align" style="margin-top:16px;">
+    <a id="startLoopBtn" class="btn waves-effect waves-light blue">Loop Starten</a>
+    <a id="resetLoopBtn" class="btn waves-effect waves-light red">Loop Resetten</a>
+  </div>
+</div>
+
+<!-- Materialize JS CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+<script>
+  // Globale Variablen
+  let nextTimerId = 1;
+  const timersById = {};
+  let loopTimers = [];
+  let loopRunning = false;
+  let loopCurrentIndex = 0;
+  let currentLoopTimer = null;
+
+  // Hilfsfunktion: Formatierung in mm:ss
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  // Kurzer, dezent piepender Ton in den letzten Sekunden
+  function beep() {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(440, ctx.currentTime);
+    gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.1);
+  }
+
+  // Angenehmer, deutlicher Endton
+  function playFinishTone() {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.type = "triangle";
+    oscillator.frequency.setValueAtTime(523, ctx.currentTime); // C5
+    gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.5);
+  }
+
+  // Timer-Klasse mit optionalen Daten zum Wiederherstellen
+  class Timer {
+    constructor(data) {
+      if (data) {
+        this.id = data.id;
+        this.presetTime = data.presetTime;
+        this.beepEnabled = data.beepEnabled;
+        this.currentTime = this.presetTime;
+        if (this.id >= nextTimerId) {
+          nextTimerId = this.id + 1;
+        }
+      } else {
+        this.id = nextTimerId++;
+        this.presetTime = 60;
+        this.beepEnabled = false;
+        this.currentTime = this.presetTime;
+      }
+      timersById[this.id] = this;
+
+      // Erstelle die Card
+      this.cardCol = document.createElement("div");
+      this.cardCol.className = "timer card z-depth-2";
+      this.cardCol.id = "timer-" + this.id;
+      this.cardCol.draggable = true;
+      this.cardCol.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", this.id);
+      });
+
+      const cardContent = document.createElement("div");
+      cardContent.className = "card-content";
+
+      // Timer-Label
+      const title = document.createElement("span");
+      title.className = "card-title";
+      title.textContent = "Timer " + this.id;
+      cardContent.appendChild(title);
+
+      // Eingabefeld: Zeit in Sekunden
+      const row1 = document.createElement("div");
+      row1.className = "row";
+      const inputDiv = document.createElement("div");
+      inputDiv.className = "input-field col s12";
+      this.timeInput = document.createElement("input");
+      this.timeInput.type = "number";
+      this.timeInput.id = "time-input-" + this.id;
+      this.timeInput.value = this.presetTime;
+      this.timeInput.min = 1;
+      this.timeInput.addEventListener("change", () => {
+        this.presetTime = parseInt(this.timeInput.value, 10) || 1;
+        if (!this.interval) {
+          this.currentTime = this.presetTime;
+          this.updateDisplay();
+        }
+      });
+      const timeLabel = document.createElement("label");
+      timeLabel.setAttribute("for", this.timeInput.id);
+      timeLabel.className = "active";
+      timeLabel.textContent = "Zeit (Sek):";
+      inputDiv.appendChild(this.timeInput);
+      inputDiv.appendChild(timeLabel);
+      row1.appendChild(inputDiv);
+      cardContent.appendChild(row1);
+
+      // Checkbox: Piepen in den letzten Sekunden
+      const row2 = document.createElement("div");
+      row2.className = "row";
+      const colCheckbox = document.createElement("div");
+      colCheckbox.className = "col s12";
+      const checkboxLabel = document.createElement("label");
+      this.beepCheckbox = document.createElement("input");
+      this.beepCheckbox.type = "checkbox";
+      this.beepCheckbox.id = "beep-checkbox-" + this.id;
+      this.beepCheckbox.checked = this.beepEnabled;
+      this.beepCheckbox.addEventListener("change", () => {
+        this.beepEnabled = this.beepCheckbox.checked;
+      });
+      const spanCheckbox = document.createElement("span");
+      spanCheckbox.textContent = " Piepen in den letzten Sekunden";
+      checkboxLabel.appendChild(this.beepCheckbox);
+      checkboxLabel.appendChild(spanCheckbox);
+      colCheckbox.appendChild(checkboxLabel);
+      row2.appendChild(colCheckbox);
+      cardContent.appendChild(row2);
+
+      // Anzeige der verbleibenden Zeit
+      this.display = document.createElement("h5");
+      this.display.className = "center-align";
+      this.display.textContent = formatTime(this.currentTime);
+      cardContent.appendChild(this.display);
+
+      this.cardCol.appendChild(cardContent);
+
+      // Card-Action: Start/Reset Button
+      const cardAction = document.createElement("div");
+      cardAction.className = "card-action center-align";
+      this.button = document.createElement("button");
+      this.button.className = "btn";
+      this.button.textContent = "Start";
+      this.button.addEventListener("click", () => {
+        if (this.interval) {
+          this.reset();
+          this.button.textContent = "Start";
+        } else {
+          this.start();
+          this.button.textContent = "Reset";
+        }
+      });
+      cardAction.appendChild(this.button);
+      this.cardCol.appendChild(cardAction);
+    }
+
+    updateDisplay() {
+      this.display.textContent = formatTime(this.currentTime);
+    }
+
+    start() {
+      this.timeInput.disabled = true;
+      this.beepCheckbox.disabled = true;
+      if (this.interval) return;
+      this.interval = setInterval(() => {
+        if (this.currentTime > 0) {
+          this.currentTime--;
+          this.updateDisplay();
+          if (this.beepEnabled && this.currentTime <= 5 && this.currentTime > 0) {
+            beep();
+          }
+        } else {
+          this.stop();
+          playFinishTone();
+          this.button.textContent = "Start";
+          if (this.finishedCallback) {
+            this.finishedCallback();
+          }
+        }
+      }, 1000);
+    }
+
+    stop() {
+      clearInterval(this.interval);
+      this.interval = null;
+      this.timeInput.disabled = false;
+      this.beepCheckbox.disabled = false;
+    }
+
+    reset() {
+      this.stop();
+      this.currentTime = this.presetTime;
+      this.updateDisplay();
+      this.finishedCallback = null;
+      this.button.disabled = false;
+    }
+
+    // Daten für das Speichern zurückgeben
+    getState() {
+      let inLoop = false;
+      if (this.cardCol.parentElement && this.cardCol.parentElement.id === "loopArea") {
+        inLoop = true;
+      }
+      return {
+        id: this.id,
+        presetTime: this.presetTime,
+        beepEnabled: this.beepEnabled,
+        inLoop: inLoop
+      };
+    }
+  }
+
+  // Fügt einen neuen Timer hinzu
+  function addTimer() {
+    const timer = new Timer();
+    document.getElementById("timersContainer").appendChild(timer.cardCol);
+  }
+
+  // Drag & Drop im Loop-Bereich
+  function handleDrop(event) {
+    event.preventDefault();
+    const timerId = event.dataTransfer.getData("text/plain");
+    const timer = timersById[timerId];
+    if (timer) {
+      const loopArea = document.getElementById("loopArea");
+      if (!loopTimers.includes(timer)) {
+        loopArea.appendChild(timer.cardCol);
+        loopTimers.push(timer);
+      }
+    }
+  }
+
+  // Loop starten: Timer nacheinander ausführen
+  function startLoop() {
+    if (loopTimers.length === 0) return;
+    loopRunning = true;
+    loopCurrentIndex = 0;
+    runLoopTimer(loopTimers[loopCurrentIndex]);
+  }
+
+  function runLoopTimer(timer) {
+    timer.reset();
+    timer.finishedCallback = function() {
+      if (!loopRunning) return;
+      loopCurrentIndex++;
+      if (loopCurrentIndex < loopTimers.length) {
+        runLoopTimer(loopTimers[loopCurrentIndex]);
+      } else {
+        loopRunning = false;
+      }
+    };
+    currentLoopTimer = timer;
+    timer.start();
+    timer.button.disabled = true;
+  }
+
+  function resetLoop() {
+    loopRunning = false;
+    if (currentLoopTimer) {
+      currentLoopTimer.stop();
+      currentLoopTimer.button.disabled = false;
+    }
+    loopTimers.forEach(timer => {
+      timer.reset();
+      timer.button.disabled = false;
+    });
+    loopCurrentIndex = 0;
+  }
+
+  // Speichert den aktuellen Zustand (alle Timer und Loop-Reihenfolge)
+  function saveState() {
+    const timersState = [];
+    for (let id in timersById) {
+      if (timersById.hasOwnProperty(id)) {
+        timersState.push(timersById[id].getState());
+      }
+    }
+    // Speichere die Reihenfolge der Timer im Loop
+    const loopOrder = loopTimers.map(timer => timer.id);
+    const state = {
+      nextTimerId: nextTimerId,
+      timers: timersState,
+      loopOrder: loopOrder
+    };
+    localStorage.setItem("sportTimerState", JSON.stringify(state));
+    M.toast({html: 'State gespeichert!', displayLength: 2000});
+  }
+
+  // Lädt den Zustand aus localStorage und stellt die Timer wieder her
+  function loadState() {
+    const stateStr = localStorage.getItem("sportTimerState");
+    if (stateStr) {
+      const state = JSON.parse(stateStr);
+      nextTimerId = state.nextTimerId || 1;
+      // Bestehende Timer entfernen
+      for (let key in timersById) {
+        if (timersById.hasOwnProperty(key)) {
+          const timer = timersById[key];
+          if (timer.cardCol.parentElement) {
+            timer.cardCol.parentElement.removeChild(timer.cardCol);
+          }
+        }
+      }
+      Object.keys(timersById).forEach(key => delete timersById[key]);
+      loopTimers = [];
+      // Timer aus dem gespeicherten Zustand neu erstellen
+      if (state.timers && Array.isArray(state.timers)) {
+        state.timers.forEach(timerData => {
+          const timer = new Timer(timerData);
+          if (timerData.inLoop) {
+            document.getElementById("loopArea").appendChild(timer.cardCol);
+            loopTimers.push(timer);
+          } else {
+            document.getElementById("timersContainer").appendChild(timer.cardCol);
+          }
+        });
+      }
+    }
+  }
+
+  // Event Listener
+  document.getElementById("addTimerBtn").addEventListener("click", addTimer);
+  document.getElementById("saveStateBtn").addEventListener("click", saveState);
+  document.getElementById("startLoopBtn").addEventListener("click", startLoop);
+  document.getElementById("resetLoopBtn").addEventListener("click", resetLoop);
+
+  // Beim Laden: Zustand wiederherstellen (falls vorhanden) oder initialen Timer hinzufügen
+  document.addEventListener("DOMContentLoaded", () => {
+    loadState();
+    if (Object.keys(timersById).length === 0) {
+      addTimer();
+    }
+  });
+</script>
+</body>
+</html>
