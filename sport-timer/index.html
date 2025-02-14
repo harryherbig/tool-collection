@@ -11,7 +11,6 @@
   <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-
   <style>
     body {
       background: #f2f7f9;
@@ -27,7 +26,7 @@
     .row {
       margin-bottom: 8px;
     }
-    /* Hauptbereich für Timer */
+    /* Container für Timer */
     #timersContainer {
       display: flex;
       flex-wrap: wrap;
@@ -72,16 +71,17 @@
       padding: 8px;
       text-align: center;
     }
+    /* Styling für den kompakt wirkenden Time-Picker */
     .time-inputs {
       display: flex;
       align-items: center;
       justify-content: center;
       margin-bottom: 8px;
     }
-    .time-inputs input {
-      text-align: center;
+    .time-inputs select {
       font-size: 1.6rem;
       width: 60px;
+      text-align: center;
       margin: 0 4px;
     }
     .colon {
@@ -104,25 +104,20 @@
   </style>
 </head>
 <body>
-
 <div class="container">
   <h1>Timer mit Loop</h1>
-
   <!-- Buttons zum Hinzufügen und Speichern -->
   <div class="control-bar">
     <a id="addTimerBtn" class="btn waves-effect waves-light">Timer hinzufügen</a>
     <a id="saveStateBtn" class="btn waves-effect waves-light green">Speichern</a>
   </div>
-
   <!-- Timer-Container -->
   <div id="timersContainer"></div>
-
   <h2>Loop Bereich</h2>
   <p class="center-align" style="margin-bottom:8px;">
     Ziehe Timer in den Loop Bereich, um sie nacheinander ablaufen zu lassen.
   </p>
   <div id="loopArea" ondragover="event.preventDefault()" ondrop="handleDrop(event)"></div>
-
   <!-- Loop-Steuerung -->
   <div class="control-bar">
     <a id="startLoopBtn" class="btn waves-effect waves-light green">Loop Starten</a>
@@ -135,7 +130,7 @@
 <!-- Materialize JS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 <script>
-  // Globaler Audio Context (für iOS Safari muss dieser durch User-Klick aktiviert werden)
+  // Globaler Audio Context – für iOS Safari (muss durch User-Klick aktiviert werden)
   let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   document.addEventListener('click', () => {
     if (audioCtx.state === 'suspended') {
@@ -159,7 +154,7 @@
     oscillator.stop(audioCtx.currentTime + 0.2);
   }
 
-  // Angenehmer, deutlicher Endton (wenn Countdown bei 0 ankommt)
+  // Endton, wenn Countdown 0 erreicht
   function playFinishTone() {
     if (audioCtx.state === 'suspended') {
       audioCtx.resume();
@@ -207,15 +202,12 @@
         this.initialSeconds = 30;
         this.beepEnabled = false;
       }
-
       // Aktuelle Restzeit in Sekunden
       this.currentSeconds = this.initialMinutes * 60 + this.initialSeconds;
-
       // Zustände
       this.intervalId = null;
       this.isRunning = false;
       this.finishedCallback = null;
-
       // In Registry speichern
       timersById[this.id] = this;
 
@@ -231,23 +223,31 @@
       const cardContent = document.createElement("div");
       cardContent.className = "card-content";
 
-      // Minuten/Sekunden-Eingabe (als Anzeige und Eingabe zugleich)
+      // Kompakte Picker: <select>-Elemente für Minuten und Sekunden
       const timeRow = document.createElement("div");
       timeRow.className = "time-inputs";
-      this.minutesInput = document.createElement("input");
-      this.minutesInput.type = "number";
-      this.minutesInput.min = "0";
-      this.minutesInput.value = this.initialMinutes;
-      this.minutesInput.inputMode = "numeric";
 
-      this.secondsInput = document.createElement("input");
-      this.secondsInput.type = "number";
-      this.secondsInput.min = "0";
-      this.secondsInput.max = "59";
-      this.secondsInput.value = this.initialSeconds;
-      this.secondsInput.inputMode = "numeric";
+      this.minutesInput = document.createElement("select");
+      this.minutesInput.className = "browser-default";
+      for (let i = 0; i < 60; i++) {
+        let opt = document.createElement("option");
+        opt.value = i;
+        opt.text = i;
+        if (i === this.initialMinutes) opt.selected = true;
+        this.minutesInput.appendChild(opt);
+      }
 
-      // Änderungen an den Eingabefeldern (nur, wenn der Timer nicht läuft)
+      this.secondsInput = document.createElement("select");
+      this.secondsInput.className = "browser-default";
+      for (let i = 0; i < 60; i++) {
+        let opt = document.createElement("option");
+        opt.value = i;
+        opt.text = i;
+        if (i === this.initialSeconds) opt.selected = true;
+        this.secondsInput.appendChild(opt);
+      }
+
+      // Wenn nicht gestartet, Änderungen erlauben
       this.minutesInput.addEventListener("change", () => {
         if (!this.isRunning) {
           this.initialMinutes = parseInt(this.minutesInput.value, 10) || 0;
@@ -264,13 +264,13 @@
         }
       });
 
-      // Hilfsfunktion, um this.currentSeconds zu aktualisieren und die Felder zu updaten
+      // Aktualisiert this.currentSeconds und die Anzeige
       const updateCurrentSeconds = () => {
         this.currentSeconds = this.initialMinutes * 60 + this.initialSeconds;
         this.updateDisplay();
       };
 
-      // Doppelpunkt
+      // Doppelpunkt zwischen den Picker
       const colon = document.createElement("div");
       colon.className = "colon";
       colon.textContent = ":";
@@ -301,8 +301,6 @@
       rowBeep.appendChild(switchDiv);
       cardContent.appendChild(rowBeep);
 
-      // Hier entfällt das separate Display – stattdessen werden die Eingabefelder zur Anzeige genutzt
-
       this.cardCol.appendChild(cardContent);
 
       // Card Action: GO/STOP Button
@@ -322,7 +320,7 @@
       this.cardCol.appendChild(cardAction);
     }
 
-    // Aktualisiert die Eingabefelder mit der aktuellen Restzeit
+    // Aktualisiert die Picker basierend auf currentSeconds
     updateDisplay() {
       const m = Math.floor(this.currentSeconds / 60);
       const s = this.currentSeconds % 60;
@@ -338,7 +336,7 @@
       this.goButton.classList.remove("green");
       this.goButton.classList.add("red");
 
-      // Eingabefelder sperren
+      // Picker sperren
       this.minutesInput.disabled = true;
       this.secondsInput.disabled = true;
       this.beepSwitch.disabled = true;
@@ -352,8 +350,10 @@
           }
           this.updateDisplay();
         } else {
+          // Countdown ist abgelaufen: Endton abspielen und zurücksetzen
           this.stop();
           playFinishTone();
+          this.reset();  // Picker zeigen wieder die ursprünglichen Werte
           if (this.finishedCallback) {
             this.finishedCallback();
           }
@@ -370,13 +370,13 @@
       this.goButton.classList.remove("red");
       this.goButton.classList.add("green");
 
-      // Eingaben wieder freigeben
+      // Picker wieder freigeben
       this.minutesInput.disabled = false;
       this.secondsInput.disabled = false;
       this.beepSwitch.disabled = false;
     }
 
-    // Zurücksetzen (z.B. vor dem Start im Loop)
+    // Zurücksetzen (setzt currentSeconds auf den ursprünglich eingestellten Wert)
     reset() {
       this.stop();
       this.currentSeconds = this.initialMinutes * 60 + this.initialSeconds;
@@ -406,7 +406,7 @@
     document.getElementById("timersContainer").appendChild(timer.cardCol);
   }
 
-  // Drop im Loop-Bereich
+  // Drag & Drop im Loop-Bereich
   function handleDrop(event) {
     event.preventDefault();
     const timerId = event.dataTransfer.getData("text/plain");
@@ -425,7 +425,7 @@
     runLoopTimer(loopTimers[loopCurrentIndex]);
   }
 
-  // Hilfsfunktion: startet einen Timer im Loop und registriert dessen Callback
+  // Startet einen Timer im Loop und registriert dessen Callback
   function runLoopTimer(timer) {
     timer.reset();
     timer.finishedCallback = function() {
@@ -457,7 +457,7 @@
     loopCurrentIndex = 0;
   }
 
-  // Speichern (Timer + Loop-Reihenfolge) in localStorage
+  // Speichern in localStorage
   function saveState() {
     const timersState = [];
     for (let id in timersById) {
@@ -482,7 +482,7 @@
     const state = JSON.parse(stateStr);
     nextTimerId = state.nextTimerId || 1;
 
-    // Bestehende Timer aus DOM entfernen
+    // Entferne bestehende Timer aus dem DOM
     for (let key in timersById) {
       if (timersById.hasOwnProperty(key)) {
         const oldTimer = timersById[key];
@@ -491,11 +491,11 @@
         }
       }
     }
-    // Registry leeren
+    // Leere die Registry
     Object.keys(timersById).forEach(key => delete timersById[key]);
     loopTimers = [];
 
-    // Timer neu erstellen
+    // Erstelle Timer neu
     if (state.timers && Array.isArray(state.timers)) {
       state.timers.forEach(tData => {
         const timer = new Timer(tData);
