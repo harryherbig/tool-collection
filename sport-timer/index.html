@@ -10,61 +10,84 @@
     body {
       background: #f2f7f9;
       font-family: 'Roboto', sans-serif;
-      padding: 16px;
+      padding: 8px;
+    }
+    .container {
+      padding: 0;
     }
     h1, h2 {
       color: #37474f;
+      margin: 0.5rem 0;
     }
-    /* Container für Timer (Flexbox) */
+    /* Container für Timer */
     #timersContainer {
       display: flex;
       flex-wrap: wrap;
-      gap: 16px;
-      margin-bottom: 24px;
+      gap: 8px;
+      margin-bottom: 16px;
+      justify-content: center;
     }
     /* Loop-Bereich */
     #loopArea {
       border: 2px dashed #4fc3f7;
       border-radius: 4px;
-      padding: 16px;
-      min-height: 120px;
+      padding: 8px;
+      min-height: 100px;
       background: #e1f5fe;
+      margin-bottom: 16px;
     }
-    /* Timer-Karten: mobile-first, Pastellgrün */
+    /* Timer-Karten */
     .timer {
       cursor: move;
       width: 100%;
       max-width: 300px;
+      margin: 4px;
     }
     @media (min-width: 600px) {
       .timer {
-        width: calc(50% - 16px);
+        width: calc(50% - 8px);
       }
     }
     @media (min-width: 992px) {
       .timer {
-        width: calc(33.33% - 16px);
+        width: calc(33.33% - 8px);
       }
     }
     .card {
       background-color: #e8f5e9;
+      margin: 0;
+    }
+    .card-content {
+      padding: 8px;
+    }
+    .card-action {
+      padding: 8px;
+    }
+    .btn {
+      padding: 0 8px;
+      height: 36px;
+      line-height: 36px;
+    }
+    /* Reduziertes Margin für Input-Felder */
+    .input-field {
+      margin: 0;
     }
   </style>
 </head>
 <body>
 <div class="container">
   <h1 class="center-align">Sport Timer</h1>
-  <div class="center-align" style="margin-bottom:24px;">
+  <div class="center-align" style="margin-bottom:16px;">
     <a id="addTimerBtn" class="btn waves-effect waves-light">Timer hinzufügen</a>
     <a id="saveStateBtn" class="btn waves-effect waves-light green">Speichern</a>
   </div>
 
   <div id="timersContainer"></div>
 
-  <h2>Loop Bereich</h2>
-  <p>Ziehe Timer in den Loop Bereich, um sie nacheinander ablaufen zu lassen.</p>
+  <h2 class="center-align">Loop Bereich</h2>
+  <p class="center-align" style="margin-bottom:8px;">Ziehe Timer in den Loop Bereich, um sie nacheinander ablaufen zu lassen.</p>
   <div id="loopArea" ondragover="event.preventDefault()" ondrop="handleDrop(event)"></div>
-  <div class="center-align" style="margin-top:16px;">
+  <div class="center-align" style="margin-top:8px;">
     <a id="startLoopBtn" class="btn waves-effect waves-light blue">Loop Starten</a>
     <a id="resetLoopBtn" class="btn waves-effect waves-light red">Loop Resetten</a>
   </div>
@@ -73,6 +96,14 @@
 <!-- Materialize JS CDN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 <script>
+  // Globaler Audio Context, der beim ersten User-Klick aktiviert wird
+  let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  document.addEventListener('click', () => {
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+  });
+
   // Globale Variablen
   let nextTimerId = 1;
   const timersById = {};
@@ -90,39 +121,44 @@
 
   // Kurzer, dezent piepender Ton in den letzten Sekunden
   function beep() {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
     oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(440, ctx.currentTime);
-    gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+    oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
     oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
+    gainNode.connect(audioCtx.destination);
     oscillator.start();
-    oscillator.stop(ctx.currentTime + 0.1);
+    oscillator.stop(audioCtx.currentTime + 0.1);
   }
 
   // Angenehmer, deutlicher Endton
   function playFinishTone() {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
     oscillator.type = "triangle";
-    oscillator.frequency.setValueAtTime(523, ctx.currentTime); // C5
-    gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
+    oscillator.frequency.setValueAtTime(523, audioCtx.currentTime); // C5
+    gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
     oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
+    gainNode.connect(audioCtx.destination);
     oscillator.start();
-    oscillator.stop(ctx.currentTime + 0.5);
+    oscillator.stop(audioCtx.currentTime + 0.5);
   }
 
-  // Timer-Klasse mit optionalen Daten zum Wiederherstellen
+  // Timer-Klasse mit persistierbaren Daten und editierbarem Label
   class Timer {
     constructor(data) {
       if (data) {
         this.id = data.id;
         this.presetTime = data.presetTime;
         this.beepEnabled = data.beepEnabled;
+        this.labelText = data.labelText || ("Timer " + data.id);
         this.currentTime = this.presetTime;
         if (this.id >= nextTimerId) {
           nextTimerId = this.id + 1;
@@ -131,11 +167,12 @@
         this.id = nextTimerId++;
         this.presetTime = 60;
         this.beepEnabled = false;
+        this.labelText = "Timer " + this.id;
         this.currentTime = this.presetTime;
       }
       timersById[this.id] = this;
 
-      // Erstelle die Card
+      // Erstelle Card
       this.cardCol = document.createElement("div");
       this.cardCol.className = "timer card z-depth-2";
       this.cardCol.id = "timer-" + this.id;
@@ -147,15 +184,30 @@
       const cardContent = document.createElement("div");
       cardContent.className = "card-content";
 
-      // Timer-Label
-      const title = document.createElement("span");
-      title.className = "card-title";
-      title.textContent = "Timer " + this.id;
-      cardContent.appendChild(title);
+      // Editierbares Label für den Timer
+      const rowLabel = document.createElement("div");
+      rowLabel.className = "row";
+      const labelInputDiv = document.createElement("div");
+      labelInputDiv.className = "input-field col s12";
+      this.labelInput = document.createElement("input");
+      this.labelInput.type = "text";
+      this.labelInput.id = "label-input-" + this.id;
+      this.labelInput.value = this.labelText;
+      this.labelInput.addEventListener("change", () => {
+        this.labelText = this.labelInput.value;
+      });
+      const labelLabel = document.createElement("label");
+      labelLabel.setAttribute("for", this.labelInput.id);
+      labelLabel.className = "active";
+      labelLabel.textContent = "Timer Label:";
+      labelInputDiv.appendChild(this.labelInput);
+      labelInputDiv.appendChild(labelLabel);
+      rowLabel.appendChild(labelInputDiv);
+      cardContent.appendChild(rowLabel);
 
       // Eingabefeld: Zeit in Sekunden
-      const row1 = document.createElement("div");
-      row1.className = "row";
+      const rowTime = document.createElement("div");
+      rowTime.className = "row";
       const inputDiv = document.createElement("div");
       inputDiv.className = "input-field col s12";
       this.timeInput = document.createElement("input");
@@ -176,12 +228,12 @@
       timeLabel.textContent = "Zeit (Sek):";
       inputDiv.appendChild(this.timeInput);
       inputDiv.appendChild(timeLabel);
-      row1.appendChild(inputDiv);
-      cardContent.appendChild(row1);
+      rowTime.appendChild(inputDiv);
+      cardContent.appendChild(rowTime);
 
       // Checkbox: Piepen in den letzten Sekunden
-      const row2 = document.createElement("div");
-      row2.className = "row";
+      const rowCheckbox = document.createElement("div");
+      rowCheckbox.className = "row";
       const colCheckbox = document.createElement("div");
       colCheckbox.className = "col s12";
       const checkboxLabel = document.createElement("label");
@@ -197,8 +249,8 @@
       checkboxLabel.appendChild(this.beepCheckbox);
       checkboxLabel.appendChild(spanCheckbox);
       colCheckbox.appendChild(checkboxLabel);
-      row2.appendChild(colCheckbox);
-      cardContent.appendChild(row2);
+      rowCheckbox.appendChild(colCheckbox);
+      cardContent.appendChild(rowCheckbox);
 
       // Anzeige der verbleibenden Zeit
       this.display = document.createElement("h5");
@@ -234,6 +286,7 @@
     start() {
       this.timeInput.disabled = true;
       this.beepCheckbox.disabled = true;
+      this.labelInput.disabled = true;
       if (this.interval) return;
       this.interval = setInterval(() => {
         if (this.currentTime > 0) {
@@ -258,6 +311,7 @@
       this.interval = null;
       this.timeInput.disabled = false;
       this.beepCheckbox.disabled = false;
+      this.labelInput.disabled = false;
     }
 
     reset() {
@@ -268,7 +322,7 @@
       this.button.disabled = false;
     }
 
-    // Daten für das Speichern zurückgeben
+    // Rückgabe der Timer-Daten für localStorage
     getState() {
       let inLoop = false;
       if (this.cardCol.parentElement && this.cardCol.parentElement.id === "loopArea") {
@@ -278,18 +332,19 @@
         id: this.id,
         presetTime: this.presetTime,
         beepEnabled: this.beepEnabled,
+        labelText: this.labelText,
         inLoop: inLoop
       };
     }
   }
 
-  // Fügt einen neuen Timer hinzu
+  // Neuen Timer hinzufügen
   function addTimer() {
     const timer = new Timer();
     document.getElementById("timersContainer").appendChild(timer.cardCol);
   }
 
-  // Drag & Drop im Loop-Bereich
+  // Drag & Drop: Timer in den Loop-Bereich ziehen
   function handleDrop(event) {
     event.preventDefault();
     const timerId = event.dataTransfer.getData("text/plain");
@@ -340,7 +395,7 @@
     loopCurrentIndex = 0;
   }
 
-  // Speichert den aktuellen Zustand (alle Timer und Loop-Reihenfolge)
+  // Speichern: Zustand (alle Timer + Loop-Reihenfolge) persistieren
   function saveState() {
     const timersState = [];
     for (let id in timersById) {
@@ -348,7 +403,6 @@
         timersState.push(timersById[id].getState());
       }
     }
-    // Speichere die Reihenfolge der Timer im Loop
     const loopOrder = loopTimers.map(timer => timer.id);
     const state = {
       nextTimerId: nextTimerId,
@@ -359,13 +413,12 @@
     M.toast({html: 'State gespeichert!', displayLength: 2000});
   }
 
-  // Lädt den Zustand aus localStorage und stellt die Timer wieder her
+  // Zustand laden und Timer wiederherstellen
   function loadState() {
     const stateStr = localStorage.getItem("sportTimerState");
     if (stateStr) {
       const state = JSON.parse(stateStr);
       nextTimerId = state.nextTimerId || 1;
-      // Bestehende Timer entfernen
       for (let key in timersById) {
         if (timersById.hasOwnProperty(key)) {
           const timer = timersById[key];
@@ -376,7 +429,6 @@
       }
       Object.keys(timersById).forEach(key => delete timersById[key]);
       loopTimers = [];
-      // Timer aus dem gespeicherten Zustand neu erstellen
       if (state.timers && Array.isArray(state.timers)) {
         state.timers.forEach(timerData => {
           const timer = new Timer(timerData);
@@ -391,13 +443,11 @@
     }
   }
 
-  // Event Listener
   document.getElementById("addTimerBtn").addEventListener("click", addTimer);
   document.getElementById("saveStateBtn").addEventListener("click", saveState);
   document.getElementById("startLoopBtn").addEventListener("click", startLoop);
   document.getElementById("resetLoopBtn").addEventListener("click", resetLoop);
 
-  // Beim Laden: Zustand wiederherstellen (falls vorhanden) oder initialen Timer hinzufügen
   document.addEventListener("DOMContentLoaded", () => {
     loadState();
     if (Object.keys(timersById).length === 0) {
